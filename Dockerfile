@@ -1,5 +1,5 @@
-# Use Python 3.9 slim image as base
-FROM python:3.9-slim
+# Use Python 3.11 as base image
+FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app
@@ -9,21 +9,28 @@ RUN apt-get update && apt-get install -y \
     gcc \
     python3-dev \
     libffi-dev \
-    python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first
+# Copy requirements first to leverage Docker cache
 COPY requirements.txt .
 
-# Create and activate virtual environment
-RUN python -m venv .venv
-ENV PATH="/app/.venv/bin:$PATH"
-
-# Install Python dependencies in virtual environment
-RUN . .venv/bin/activate && pip install --no-cache-dir -r requirements.txt
+# Set up virtual environment and install dependencies
+RUN python3.11 -m venv /app/.venv \
+    && . /app/.venv/bin/activate \
+    && python3.11 -m pip install --upgrade pip \
+    && python3.11 -m pip install -r requirements.txt
 
 # Copy the rest of the application
 COPY . .
 
-# Command to run the application (will use the venv python by default due to PATH)
-CMD ["python", "main.py"]
+# Make sure we use the Python from virtual environment
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Add a startup message
+RUN echo '#!/bin/sh' > /app/start.sh \
+    && echo 'echo "Starting telegram bot with $(which python3.11)"' >> /app/start.sh \
+    && echo 'python3.11 main.py' >> /app/start.sh \
+    && chmod +x /app/start.sh
+
+# Command to run the application
+CMD ["/app/start.sh"]
